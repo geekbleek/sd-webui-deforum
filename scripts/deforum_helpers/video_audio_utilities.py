@@ -65,23 +65,27 @@ def vid2frames(video_path, video_in_frame_path, n=1, overwrite=True, extract_fro
         if os.path.exists(video_in_frame_path) :
             input_content = os.listdir(video_in_frame_path)
 
-        # check if existing frame is the same video, if not we need to erase it and repopulate
-        if len(input_content) > 0 and numeric_files_output is False:
-            #get the name of the existing frame
-            content_name = get_frame_name(input_content[0])
-            if not content_name.startswith(name):
-                overwrite = True
-
         # grab the frame count to check against existing directory len 
         frame_count = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT)) 
+        expected_frame_count = math.ceil((extract_to_frame - extract_from_frame + 1) / n)
 
         # raise error if the user wants to skip more frames than exist
         if n >= frame_count : 
             raise RuntimeError('Skipping more frames than input video contains. extract_nth_frames larger than input frames')
 
-        expected_frame_count = math.ceil(frame_count / n) 
+        # check if existing frame is the same video, if not we need to erase it and repopulate
+        if len(input_content) > 0 and numeric_files_output is False:
+            #get the name of the existing frame
+            content_from_name = get_frame_name(input_content[extract_from_frame])
+            if extract_to_frame == -1:
+                content_to_name = get_frame_name(input_content[frame_count])
+            else:
+                content_to_name = get_frame_name(input_content[expected_frame_count])
+            if not content_from_name.startswith(name) and not content_to_name.startswith(name):
+                overwrite = True
+
         # Check to see if the frame count is matches the number of files in path
-        if overwrite or expected_frame_count != len(input_content):
+        if overwrite or expected_frame_count > len(input_content):
             shutil.rmtree(video_in_frame_path)
             os.makedirs(video_in_frame_path, exist_ok=True) # just deleted the folder so we need to make it again
             input_content = os.listdir(video_in_frame_path)
@@ -91,7 +95,7 @@ def vid2frames(video_path, video_in_frame_path, n=1, overwrite=True, extract_fro
             vidcap.set(cv2.CAP_PROP_POS_FRAMES, extract_from_frame) # Set the starting frame
             success,image = vidcap.read()
             count = extract_from_frame
-            t=0
+            t=1
             success = True
             max_workers = int(max(1, (os.cpu_count() / 2) - 1)) # set max threads to cpu cores halved, minus 1. minimum is 1
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -108,7 +112,7 @@ def vid2frames(video_path, video_in_frame_path, n=1, overwrite=True, extract_fro
                         t += 1
                     count += 1
                     success, image = vidcap.read()
-            print(f"Extracted {count} frames from video in {time.time() - start_time:.2f} seconds!")
+            print(f"Read {count} frames from source video, and extracted {t} frames in {time.time() - start_time:.2f} seconds!")
         else:
             print("Frames already unpacked")
         vidcap.release()
